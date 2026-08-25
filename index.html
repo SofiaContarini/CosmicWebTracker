@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Web | Hand Tracked</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #010103; 
+            color: white; 
+            font-family: sans-serif; 
+        }
+        #canvas-container { 
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute; 
+            z-index: 1; 
+        }
+        #ui-layer { 
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            z-index: 10; 
+            pointer-events: none; 
+        }
+        /* New Video Container for the Webcam and Drawing Canvas */
+        #video-container { 
+            position: absolute; 
+            bottom: 20px; 
+            right: 20px; 
+            width: 240px; 
+            height: 180px;
+            z-index: 10; 
+            border-radius: 12px; 
+            border: 2px solid #555; 
+            overflow: hidden;
+            background-color: #000;
+        }
+        #webcam-video, #webcam-canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            transform: scaleX(-1); /* Mirrors both video and drawings */
+            object-fit: cover;
+        }
+        #mode-display { 
+            background: rgba(20, 20, 20, 0.8); 
+            padding: 15px 25px; 
+            border-radius: 8px; 
+            font-size: 20px; 
+            font-weight: bold; 
+            border: 2px solid #555; 
+        }
+        .open { color: #FF6400; border-color: #FF6400 !important; }
+        .pointer { color: #00FF00; border-color: #00FF00 !important; }
+        .pinch { color: #00FFFF; border-color: #00FFFF !important; }
+        .fist { color: #999999; border-color: #999999 !important; }
+        .error { color: #FF0000; border-color: #FF0000 !important; }
+    </style>
+    
+    <!-- MediaPipe Libraries (including drawing utils) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div id="mode-display" class="fist">INITIALIZING...</div>
+    </div>
+    
+    <div id="canvas-container"></div>
+    
+    <!-- The visible webcam feed and drawing overlay -->
+    <div id="video-container">
+        <video id="webcam-video" autoplay playsinline></video>
+        <canvas id="webcam-canvas"></canvas>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+
+        // --------------------------------------------------------
+        // 1. SETUP THREE.JS SCENE
+        // --------------------------------------------------------
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.z = 250; // Default, will be updated when mesh loads
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const pivot = new THREE.Group();
+        scene.add(pivot);
+
+        // --- NEW: Add physical 3D lighting to the scene! ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); 
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(100, 200, 300);
+        scene.add(dirLight);
+	
+const modeDisplay = document.getElementById('mode-display');
+
+        const loader = new PLYLoader();
+        loader.load(
+            'cosmic_web.ply', 
+            function (geometry) {
+                console.log("Mesh loaded successfully!");
+                geometry.computeVertexNormals();
+                geometry.center();
+                geometry.computeBoundingSphere();
+                
+                const radius = geometry.boundingSphere.radius;
+                camera.position.z = radius * 2.5; 
+
+	// THE REAL MATERIAL: 3D Lighting Restored
+                const material = new THREE.MeshPhongMaterial({
+                    vertexColors: true,     
+                    transparent: true,      
+                    blending: THREE.NormalBlending, 
+                    depthWrite: false,      
+                    side: THREE.DoubleSide,
+                    shininess: 50 // The beautiful specular reflections
+                });
+
+                // THE MAGIC TRICK: Calibrated GPU Alpha Injection
+                material.onBeforeCompile = function (shader) {
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        `vec4 diffuseColor = vec4( diffuse, opacity );`,
+                        `
+                        // 1. Calculate base brightness from the pure, vibrant colors
+                        float brightness = max(vColor.r, max(vColor.g, vColor.b));
+                        
+                        // 2. Boost the visibility mathematically! 
+                        // The 'pow' keeps the empty voids transparent, while the '* 2.5' amplifies the gas.
+                        float customAlpha = pow(brightness, 1.2) * 2.5; 
+                        
+                        vec4 diffuseColor = vec4( diffuse, customAlpha );
+                        `
+                    );
+        };
+	
+
+                const mesh = new THREE.Mesh(geometry, material);
+                pivot.add(mesh);
+        },
+	
+            function (xhr) {
+                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function (error) {
+                console.error("CRITICAL ERROR LOADING MESH:", error);
+                modeDisplay.innerText = "ERROR LOADING MESH (Check F12)";
+                modeDisplay.className = "error";
+            }
+        );
+
+        // --------------------------------------------------------
+        // 2. SETUP MEDIAPIPE HAND TRACKING & DRAWING
+        // --------------------------------------------------------
+        const videoElement = document.getElementById('webcam-video');
+        const canvasElement = document.getElementById('webcam-canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        
+        let prevX = 0, prevY = 0;
+        let prevState = "FIST";
+
+        const hands = new window.Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults((results) => {
+            if (modeDisplay.className === "error") return;
+
+            // --- DRAW THE HAND SKELETON ---
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    window.drawConnectors(canvasCtx, landmarks, window.HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                    window.drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
+                }
+            }
+            canvasCtx.restore();
+            // ------------------------------
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                const wrist = landmarks[0];
+                const thumbTip = landmarks[4];
+                const indexTip = landmarks[8], indexPip = landmarks[6];
+                const middleTip = landmarks[12], middlePip = landmarks[10];
+                const ringTip = landmarks[16], ringPip = landmarks[14];
+                const pinkyTip = landmarks[20], pinkyPip = landmarks[18];
+
+                const indexClosed = indexTip.y > indexPip.y;
+                const middleClosed = middleTip.y > middlePip.y;
+                const ringClosed = ringTip.y > ringPip.y;
+                const pinkyClosed = pinkyTip.y > pinkyPip.y;
+
+                const isFist = indexClosed && middleClosed && ringClosed && pinkyClosed;
+                const isPointer = !indexClosed && middleClosed && ringClosed && pinkyClosed;
+                
+                const dxPinch = thumbTip.x - indexTip.x;
+                const dyPinch = thumbTip.y - indexTip.y;
+                const pinchDist = Math.sqrt(dxPinch*dxPinch + dyPinch*dyPinch);
+                const isPinch = pinchDist < 0.05 && !isFist;
+
+                let currentState = "OPEN";
+                if (isFist) currentState = "FIST";
+                else if (isPinch) currentState = "PINCH";
+                else if (isPointer) currentState = "POINTER";
+
+                let cx = 0, cy = 0;
+                if (currentState === "FIST") {
+                    cx = wrist.x; cy = wrist.y;
+                } else {
+                    cx = indexTip.x; cy = indexTip.y;
+                }
+
+                let dx = cx - prevX;
+                let dy = cy - prevY;
+                if (currentState !== prevState) { dx = 0; dy = 0; }
+
+                if (currentState === "FIST") {
+                    modeDisplay.innerText = "REST / DO NOTHING";
+                    modeDisplay.className = "fist";
+                } else if (currentState === "PINCH") {
+                    modeDisplay.innerText = "FLY / ZOOM (Pinch Up/Down)";
+                    modeDisplay.className = "pinch";
+                    if (Math.abs(dy) > 0.005) {
+                        camera.position.z += dy * Math.max(10, camera.position.z * 0.5); 
+                    }
+                } else if (currentState === "POINTER") {
+                    modeDisplay.innerText = "PAN / STRAFE (1 Finger Up)";
+                    modeDisplay.className = "pointer";
+                    if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
+                        pivot.position.x -= dx * 100; 
+                        pivot.position.y -= dy * 100;
+                    }
+                } else {
+                    modeDisplay.innerText = "ORBIT / ROTATE (Open Hand)";
+                    modeDisplay.className = "open";
+                    if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
+                        pivot.rotation.y += dx * 3;
+                        pivot.rotation.x += dy * 3;
+                    }
+                }
+
+                prevX = cx;
+                prevY = cy;
+                prevState = currentState;
+            } else {
+                modeDisplay.innerText = "SEARCHING HAND...";
+                modeDisplay.className = "fist";
+            }
+        });
+
+        const cameraFeed = new window.Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640,
+            height: 480
+        });
+        cameraFeed.start();
+
+        // --------------------------------------------------------
+        // 3. RENDER LOOP
+        // --------------------------------------------------------
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
