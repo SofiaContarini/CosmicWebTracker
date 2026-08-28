@@ -47,18 +47,16 @@
         .gesture-item {
             display: flex; align-items: center; margin-bottom: 10px; font-size: 16px;
         }
-        /* Added a subtle background for the icons in case the images haven't loaded yet */
         .gesture-item img {
-	width: 30px; 
-	height: 30px; 
-	margin-right: 15px; 
-	background: rgba(255, 255, 255, 0.1); /* Optional: keeps the subtle bounding box */
-	border-radius: 4px; 
-	object-fit: contain;
-	}
+            width: 30px; 
+            height: 30px; 
+            margin-right: 15px; 
+            background: rgba(255, 255, 255, 0.1); 
+            border-radius: 4px; 
+            object-fit: contain;
+        }
         .gesture-item:last-child { margin-bottom: 0; }
 
-        /* Center Countdown UI */
         #countdown-overlay {
             position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
             font-size: 100px; font-weight: bold; color: #FFD700;
@@ -70,6 +68,24 @@
             font-size: 40px; font-weight: bold; color: #FFD700;
             background: rgba(20, 20, 20, 0.9); padding: 30px; border-radius: 15px; 
             border: 4px solid #FFD700; display: none; z-index: 100; text-align: center;
+            transition: opacity 0.5s ease;
+            opacity: 1;
+        }
+
+        #victory-message.fade-out {
+            opacity: 0;
+        }
+
+        #victory-message.minimized {
+            top: auto;
+            bottom: 20px;
+            transform: translateX(-50%);
+            font-size: 20px;
+            padding: 10px 20px;
+            border-width: 2px;
+        }
+        #victory-message.minimized span {
+            font-size: 14px !important;
         }
 
         .open { color: #FF6400; border-color: #FF6400 !important; }
@@ -107,7 +123,6 @@
         </select>
     </div>
 
-    <!-- Ensure your image files match these paths exactly -->
     <div id="gesture-legend">
         <div class="gesture-item"><img src="icons/fist.png" alt="Rest"> <span><b>FIST:</b> Rest / Default</span></div>
         <div class="gesture-item"><img src="icons/open.png" alt="Orbit"> <span><b>OPEN:</b> Orbit Web</span></div>
@@ -186,7 +201,7 @@
         let bretzelFound = false;
         const gltfLoader = new GLTFLoader();
         
-        let baseScale = 0.1; 
+        let baseScale = 0.11; 
         const modeSelect = document.getElementById('mode-select');
 
         function updateBretzelScale() {
@@ -201,31 +216,29 @@
 
         modeSelect.addEventListener('change', updateBretzelScale);
 
-	// 1. Setup the Texture Loader
-	const textureLoader = new THREE.TextureLoader();
-	const bretzelTex = textureLoader.load('./object/bretzel.jpg');
-	bretzelTex.colorSpace = THREE.SRGBColorSpace; // Ensures the colors aren't washed out
+        const textureLoader = new THREE.TextureLoader();
+        const bretzelTex = textureLoader.load('./object/bretzel.jpg');
+        bretzelTex.colorSpace = THREE.SRGBColorSpace;
 
-	gltfLoader.load('./object/bretzel.glb', function (gltf) { 
-	       bretzel = gltf.scene;
-	
-	       // 2. Force the texture onto the loaded GLB mesh
-	       bretzel.traverse((child) => {
-               if (child.isMesh) {
-                   child.material.map = bretzelTex;
-                   child.material.needsUpdate = true;
+        gltfLoader.load('./object/bretzel.glb', function (gltf) { 
+            bretzel = gltf.scene;
+            
+            bretzel.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.map = bretzelTex;
+                    child.material.needsUpdate = true;
                 }
-	    });
-	
-	    bretzel.position.set(
-                (Math.random() - 0.5) * 200,
-                (Math.random() - 0.5) * 200,
-                (Math.random() - 0.5) * 200
-	    );
-	    pivot.add(bretzel); 
-	    updateBretzelScale(); 
-	});
-	
+            });
+            
+            bretzel.position.set(
+                (Math.random() - 0.5) * 100,
+                (Math.random() - 0.5) * 100,
+                (Math.random() - 0.5) * 100
+            );
+            pivot.add(bretzel); 
+            updateBretzelScale(); 
+        });
+        
         const videoElement = document.getElementById('webcam-video');
         const canvasElement = document.getElementById('webcam-canvas');
         const canvasCtx = canvasElement.getContext('2d');
@@ -233,19 +246,17 @@
         let prevX = 0, prevY = 0;
         let prevState = "REST";
 
-        // Restart Timer Variables
         let restartTimer = null;
         let countdownInterval = null;
         let countdownValue = 3;
 
         function startCountdown() {
-            if (restartTimer) return; // Already counting down
+            if (restartTimer) return; 
             
             countdownValue = 3;
             countdownOverlay.innerText = countdownValue;
             countdownOverlay.style.display = 'block';
 
-            // Update text every second
             countdownInterval = setInterval(() => {
                 countdownValue--;
                 if (countdownValue > 0) {
@@ -255,23 +266,24 @@
                 }
             }, 1000);
 
-            // Execute the reset after 4 seconds total
             restartTimer = setTimeout(() => {
                 clearInterval(countdownInterval);
                 countdownOverlay.style.display = 'none';
                 restartTimer = null;
                 
-                // Reset scene
                 camera.position.z = 250;
                 pivot.position.set(0, 0, 0);
                 pivot.rotation.set(0, 0, 0);
                 bretzel.position.set(
-                    (Math.random() - 0.5) * 200,
-                    (Math.random() - 0.5) * 200,
-                    (Math.random() - 0.5) * 200
+                    (Math.random() - 0.5) * 100,
+                    (Math.random() - 0.5) * 100,
+                    (Math.random() - 0.5) * 100
                 );
                 bretzelFound = false;
-                document.getElementById('victory-message').style.display = 'none';
+                
+                const victoryMsg = document.getElementById('victory-message');
+                victoryMsg.style.display = 'none';
+                victoryMsg.classList.remove('minimized', 'fade-out'); 
             }, 4000);
         }
 
@@ -337,7 +349,6 @@
                 let dx = currentState !== prevState ? 0 : cx - prevX;
                 let dy = currentState !== prevState ? 0 : cy - prevY;
 
-                // Handle countdown cancellation if gesture breaks
                 if (currentState !== "RESTART") cancelCountdown();
 
                 if (currentState === "REST") {
@@ -381,13 +392,27 @@
             requestAnimationFrame(animate);
             
             if (bretzel && !bretzelFound) {
-                
                 bretzel.getWorldPosition(bretzelWorldPos);
                 
                 if (camera.position.distanceTo(bretzelWorldPos) < 35) { 
                     bretzelFound = true;
-                    document.getElementById('victory-message').style.display = 'block';
                     
+                    const victoryMsg = document.getElementById('victory-message');
+                    victoryMsg.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        if (bretzelFound) { 
+                            victoryMsg.classList.add('fade-out');
+                            
+                            setTimeout(() => {
+                                if (bretzelFound) {
+                                    victoryMsg.classList.add('minimized');
+                                    victoryMsg.classList.remove('fade-out');
+                                }
+                            }, 500); 
+                        }
+                    }, 5000);
+                                  
                     confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 }, zIndex: 9999 });
                     setTimeout(() => confetti({ particleCount: 100, angle: 60, spread: 55, origin: { x: 0 }, zIndex: 9999 }), 250);
                     setTimeout(() => confetti({ particleCount: 100, angle: 120, spread: 55, origin: { x: 1 }, zIndex: 9999 }), 400);
