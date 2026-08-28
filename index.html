@@ -3,71 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cosmic Web | Hand Tracked</title>
+    <title>Cosmic Web | Hand Tracked Pretzel Hunt</title>
     <style>
         body { 
-            margin: 0; 
-            overflow: hidden; 
-            background-color: #010103; 
-            color: white; 
-            font-family: sans-serif; 
+            margin: 0; overflow: hidden; background-color: #010103; 
+            color: white; font-family: sans-serif; 
         }
         #canvas-container { 
-            width: 100vw; 
-            height: 100vh; 
-            position: absolute; 
-            z-index: 1; 
+            width: 100vw; height: 100vh; position: absolute; z-index: 1; 
         }
         #ui-layer { 
-            position: absolute; 
-            top: 20px; 
-            left: 20px; 
-            z-index: 10; 
-            pointer-events: none; 
+            position: absolute; top: 20px; left: 20px; z-index: 10; pointer-events: none; 
         }
-        /* New Video Container for the Webcam and Drawing Canvas */
         #video-container { 
-            position: absolute; 
-            bottom: 20px; 
-            right: 20px; 
-            width: 240px; 
-            height: 180px;
-            z-index: 10; 
-            border-radius: 12px; 
-            border: 2px solid #555; 
-            overflow: hidden;
-            background-color: #000;
+            position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px;
+            z-index: 10; border-radius: 12px; border: 2px solid #555; 
+            overflow: hidden; background-color: #000;
         }
         #webcam-video, #webcam-canvas { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            transform: scaleX(-1); /* Mirrors both video and drawings */
-            object-fit: cover;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            transform: scaleX(-1); object-fit: cover;
         }
         #mode-display { 
-            background: rgba(20, 20, 20, 0.8); 
-            padding: 15px 25px; 
-            border-radius: 8px; 
-            font-size: 20px; 
-            font-weight: bold; 
-            border: 2px solid #555; 
+            background: rgba(20, 20, 20, 0.8); padding: 15px 25px; 
+            border-radius: 8px; font-size: 20px; font-weight: bold; border: 2px solid #555; 
         }
+        
+        #difficulty-ui {
+            position: absolute; top: 20px; right: 20px; z-index: 10;
+            background: rgba(20, 20, 20, 0.8); padding: 10px; border-radius: 8px;
+            border: 2px solid #555; display: flex; gap: 10px; align-items: center;
+        }
+        #difficulty-ui select {
+            background: #222; color: white; border: 1px solid #777; 
+            padding: 5px; border-radius: 4px; font-size: 16px; outline: none; cursor: pointer;
+        }
+        
+        #gesture-legend {
+            position: fixed; bottom: 20px; left: 20px; z-index: 10;
+            background: rgba(0, 0, 0, 0.4); padding: 15px; border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2); pointer-events: none;
+        }
+        .gesture-item {
+            display: flex; align-items: center; margin-bottom: 10px; font-size: 16px;
+        }
+        /* Added a subtle background for the icons in case the images haven't loaded yet */
+        .gesture-item img {
+	width: 30px; 
+	height: 30px; 
+	margin-right: 15px; 
+	background: rgba(255, 255, 255, 0.1); /* Optional: keeps the subtle bounding box */
+	border-radius: 4px; 
+	object-fit: contain;
+	}
+        .gesture-item:last-child { margin-bottom: 0; }
+
+        /* Center Countdown UI */
+        #countdown-overlay {
+            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 100px; font-weight: bold; color: #FFD700;
+            display: none; z-index: 100; text-shadow: 0px 4px 20px rgba(0,0,0,0.8);
+        }
+
+        #victory-message {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 40px; font-weight: bold; color: #FFD700;
+            background: rgba(20, 20, 20, 0.9); padding: 30px; border-radius: 15px; 
+            border: 4px solid #FFD700; display: none; z-index: 100; text-align: center;
+        }
+
         .open { color: #FF6400; border-color: #FF6400 !important; }
         .pointer { color: #00FF00; border-color: #00FF00 !important; }
-        .pinch { color: #00FFFF; border-color: #00FFFF !important; }
+        .two-fingers { color: #00FFFF; border-color: #00FFFF !important; }
+        .restart { color: #FF00FF; border-color: #FF00FF !important; }
         .fist { color: #999999; border-color: #999999 !important; }
-        .error { color: #FF0000; border-color: #FF0000 !important; }
     </style>
     
-    <!-- MediaPipe Libraries (including drawing utils) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
-    <!-- Three.js Import Map -->
     <script type="importmap">
         {
             "imports": {
@@ -78,14 +94,32 @@
     </script>
 </head>
 <body>
-
     <div id="ui-layer">
         <div id="mode-display" class="fist">INITIALIZING...</div>
     </div>
     
+    <div id="difficulty-ui">
+        <label for="mode-select">Difficulty:</label>
+        <select id="mode-select">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+        </select>
+    </div>
+
+    <!-- Ensure your image files match these paths exactly -->
+    <div id="gesture-legend">
+        <div class="gesture-item"><img src="icons/fist.png" alt="Rest"> <span><b>FIST:</b> Rest / Default</span></div>
+        <div class="gesture-item"><img src="icons/open.png" alt="Orbit"> <span><b>OPEN:</b> Orbit Web</span></div>
+        <div class="gesture-item"><img src="icons/pointer.png" alt="Pan"> <span><b>1 FINGER:</b> Pan / Strafe</span></div>
+        <div class="gesture-item"><img src="icons/two_fingers.png" alt="Fly"> <span><b>2 FINGERS:</b> Fly Forward/Back</span></div>
+        <div class="gesture-item"><img src="icons/thumb_up.png" alt="Restart"> <span><b>THUMB UP:</b> Restart Game</span></div>
+    </div>
+    
+    <div id="countdown-overlay">3</div>
+    <div id="victory-message">🥨 PRETZEL FOUND! 🥨<br><span style="font-size:20px; color:#fff;">You explored the cosmic web!</span></div>
     <div id="canvas-container"></div>
     
-    <!-- The visible webcam feed and drawing overlay -->
     <div id="video-container">
         <video id="webcam-video" autoplay playsinline></video>
         <canvas id="webcam-canvas"></canvas>
@@ -94,14 +128,12 @@
     <script type="module">
         import * as THREE from 'three';
         import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // --------------------------------------------------------
-        // 1. SETUP THREE.JS SCENE
-        // --------------------------------------------------------
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
-        camera.position.z = 250; // Default, will be updated when mesh loads
+        camera.position.z = 250; 
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -110,97 +142,155 @@
         const pivot = new THREE.Group();
         scene.add(pivot);
 
-        // --- NEW: Add physical 3D lighting to the scene! ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); 
         scene.add(ambientLight);
-        
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
         dirLight.position.set(100, 200, 300);
         scene.add(dirLight);
-	
-const modeDisplay = document.getElementById('mode-display');
+
+        const modeDisplay = document.getElementById('mode-display');
+        const countdownOverlay = document.getElementById('countdown-overlay');
 
         const loader = new PLYLoader();
-        loader.load(
-            'cosmic_web.ply', 
-            function (geometry) {
-                console.log("Mesh loaded successfully!");
-                geometry.computeVertexNormals();
-                geometry.center();
-                geometry.computeBoundingSphere();
-                
-                const radius = geometry.boundingSphere.radius;
-                camera.position.z = radius * 2.5; 
+        loader.load('cosmic_web.ply', function (geometry) {
+            geometry.computeVertexNormals();
+            geometry.center();
+            geometry.computeBoundingSphere();
+            camera.position.z = geometry.boundingSphere.radius * 2.5; 
 
-	// THE REAL MATERIAL: 3D Lighting Restored
-                const material = new THREE.MeshPhongMaterial({
-                    vertexColors: true,     
-                    transparent: true,      
-                    blending: THREE.NormalBlending, 
-                    depthWrite: false,      
-                    side: THREE.DoubleSide,
-                    shininess: 50 // The beautiful specular reflections
-                });
+            const material = new THREE.MeshPhongMaterial({
+                vertexColors: true,     
+                transparent: true,      
+                blending: THREE.NormalBlending, 
+                depthWrite: false,      
+                side: THREE.DoubleSide,
+                shininess: 50 
+            });
 
-                // THE MAGIC TRICK: Calibrated GPU Alpha Injection
-                material.onBeforeCompile = function (shader) {
-                    shader.fragmentShader = shader.fragmentShader.replace(
-                        `vec4 diffuseColor = vec4( diffuse, opacity );`,
-                        `
-                        // 1. Calculate base brightness from the pure, vibrant colors
-                        float brightness = max(vColor.r, max(vColor.g, vColor.b));
-                        
-                        // 2. Boost the visibility mathematically! 
-                        // The 'pow' keeps the empty voids transparent, while the '* 2.5' amplifies the gas.
-                        float customAlpha = pow(brightness, 1.2) * 2.5; 
-                        
-                        vec4 diffuseColor = vec4( diffuse, customAlpha );
-                        `
-                    );
-        };
+            material.onBeforeCompile = function (shader) {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    `vec4 diffuseColor = vec4( diffuse, opacity );`,
+                    `
+                    float brightness = max(vColor.r, max(vColor.g, vColor.b));
+                    float customAlpha = pow(brightness, 1.2) * 2.5; 
+                    vec4 diffuseColor = vec4( diffuse, customAlpha );
+                    `
+                );
+            };
+
+            const mesh = new THREE.Mesh(geometry, material);
+            pivot.add(mesh);
+        });
+
+        let bretzel;
+        let bretzelFound = false;
+        const gltfLoader = new GLTFLoader();
+        
+        let baseScale = 0.1; 
+        const modeSelect = document.getElementById('mode-select');
+
+        function updateBretzelScale() {
+            if (!bretzel) return;
+            let factor = 1.0;
+            if (modeSelect.value === 'easy') factor = 2.25; 
+            if (modeSelect.value === 'hard') factor = 0.35; 
+            
+            let finalScale = baseScale * factor;
+            bretzel.scale.set(finalScale, finalScale, finalScale);
+        }
+
+        modeSelect.addEventListener('change', updateBretzelScale);
+
+	// 1. Setup the Texture Loader
+	const textureLoader = new THREE.TextureLoader();
+	const bretzelTex = textureLoader.load('./object/bretzel.jpg');
+	bretzelTex.colorSpace = THREE.SRGBColorSpace; // Ensures the colors aren't washed out
+
+	gltfLoader.load('./object/bretzel.glb', function (gltf) { 
+	       bretzel = gltf.scene;
 	
-
-                const mesh = new THREE.Mesh(geometry, material);
-                pivot.add(mesh);
-        },
+	       // 2. Force the texture onto the loaded GLB mesh
+	       bretzel.traverse((child) => {
+               if (child.isMesh) {
+                   child.material.map = bretzelTex;
+                   child.material.needsUpdate = true;
+                }
+	    });
 	
-            function (xhr) {
-                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-            },
-            function (error) {
-                console.error("CRITICAL ERROR LOADING MESH:", error);
-                modeDisplay.innerText = "ERROR LOADING MESH (Check F12)";
-                modeDisplay.className = "error";
-            }
-        );
-
-        // --------------------------------------------------------
-        // 2. SETUP MEDIAPIPE HAND TRACKING & DRAWING
-        // --------------------------------------------------------
+	    bretzel.position.set(
+                (Math.random() - 0.5) * 200,
+                (Math.random() - 0.5) * 200,
+                (Math.random() - 0.5) * 200
+	    );
+	    pivot.add(bretzel); 
+	    updateBretzelScale(); 
+	});
+	
         const videoElement = document.getElementById('webcam-video');
         const canvasElement = document.getElementById('webcam-canvas');
         const canvasCtx = canvasElement.getContext('2d');
         
         let prevX = 0, prevY = 0;
-        let prevState = "FIST";
+        let prevState = "REST";
+
+        // Restart Timer Variables
+        let restartTimer = null;
+        let countdownInterval = null;
+        let countdownValue = 3;
+
+        function startCountdown() {
+            if (restartTimer) return; // Already counting down
+            
+            countdownValue = 3;
+            countdownOverlay.innerText = countdownValue;
+            countdownOverlay.style.display = 'block';
+
+            // Update text every second
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                if (countdownValue > 0) {
+                    countdownOverlay.innerText = countdownValue;
+                } else {
+                    countdownOverlay.innerText = "START!";
+                }
+            }, 1000);
+
+            // Execute the reset after 4 seconds total
+            restartTimer = setTimeout(() => {
+                clearInterval(countdownInterval);
+                countdownOverlay.style.display = 'none';
+                restartTimer = null;
+                
+                // Reset scene
+                camera.position.z = 250;
+                pivot.position.set(0, 0, 0);
+                pivot.rotation.set(0, 0, 0);
+                bretzel.position.set(
+                    (Math.random() - 0.5) * 200,
+                    (Math.random() - 0.5) * 200,
+                    (Math.random() - 0.5) * 200
+                );
+                bretzelFound = false;
+                document.getElementById('victory-message').style.display = 'none';
+            }, 4000);
+        }
+
+        function cancelCountdown() {
+            if (restartTimer) {
+                clearTimeout(restartTimer);
+                clearInterval(countdownInterval);
+                restartTimer = null;
+                countdownOverlay.style.display = 'none';
+            }
+        }
 
         const hands = new window.Hands({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
-        });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 
         hands.onResults((results) => {
-            if (modeDisplay.className === "error") return;
-
-            // --- DRAW THE HAND SKELETON ---
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
             canvasCtx.save();
@@ -213,102 +303,100 @@ const modeDisplay = document.getElementById('mode-display');
                 }
             }
             canvasCtx.restore();
-            // ------------------------------
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
-                
                 const wrist = landmarks[0];
-                const thumbTip = landmarks[4];
-                const indexTip = landmarks[8], indexPip = landmarks[6];
+                const thumbTip = landmarks[4], thumbIp = landmarks[3], thumbMcp = landmarks[2];
+                const indexTip = landmarks[8], indexPip = landmarks[6], indexMcp = landmarks[5];
                 const middleTip = landmarks[12], middlePip = landmarks[10];
                 const ringTip = landmarks[16], ringPip = landmarks[14];
-                const pinkyTip = landmarks[20], pinkyPip = landmarks[18];
+                const pinkyTip = landmarks[20], pinkyPip = landmarks[18], pinkyMcp = landmarks[17];
 
-                const indexClosed = indexTip.y > indexPip.y;
-                const middleClosed = middleTip.y > middlePip.y;
-                const ringClosed = ringTip.y > ringPip.y;
-                const pinkyClosed = pinkyTip.y > pinkyPip.y;
+                const indexClosed = indexTip.y > indexPip.y, middleClosed = middleTip.y > middlePip.y;
+                const ringClosed = ringTip.y > ringPip.y, pinkyClosed = pinkyTip.y > pinkyPip.y;
 
-                const isFist = indexClosed && middleClosed && ringClosed && pinkyClosed;
-                const isPointer = !indexClosed && middleClosed && ringClosed && pinkyClosed;
+                const isOpen = !indexClosed && !middleClosed && !ringClosed && !pinkyClosed; 
+                const isTwoFingers = !indexClosed && !middleClosed && ringClosed && pinkyClosed; 
+                const isPointer = !indexClosed && middleClosed && ringClosed && pinkyClosed; 
                 
-                const dxPinch = thumbTip.x - indexTip.x;
-                const dyPinch = thumbTip.y - indexTip.y;
-                const pinchDist = Math.sqrt(dxPinch*dxPinch + dyPinch*dyPinch);
-                const isPinch = pinchDist < 0.05 && !isFist;
+                const thumbIsStraightUp = (thumbTip.y < thumbIp.y) && (thumbTip.y < thumbMcp.y); 
+                const isSideways = Math.abs(indexMcp.x - pinkyMcp.x) < 0.08; 
+                const isThumbsUp = indexClosed && middleClosed && ringClosed && pinkyClosed && thumbIsStraightUp && (thumbTip.y < indexMcp.y - 0.05) && isSideways; 
+                const isFist = indexClosed && middleClosed && ringClosed && pinkyClosed && !isThumbsUp; 
 
-                let currentState = "OPEN";
-                if (isFist) currentState = "FIST";
-                else if (isPinch) currentState = "PINCH";
-                else if (isPointer) currentState = "POINTER";
+                let currentState = "REST"; 
+                if (isFist) currentState = "REST"; 
+                else if (isOpen) currentState = "OPEN"; 
+                else if (isTwoFingers) currentState = "TWO_FINGERS"; 
+                else if (isPointer) currentState = "POINTER"; 
+                else if (isThumbsUp) currentState = "RESTART"; 
 
-                let cx = 0, cy = 0;
-                if (currentState === "FIST") {
-                    cx = wrist.x; cy = wrist.y;
-                } else {
-                    cx = indexTip.x; cy = indexTip.y;
-                }
+                let cx = (currentState === "REST") ? wrist.x : indexTip.x;
+                let cy = (currentState === "REST") ? wrist.y : indexTip.y;
+                let dx = currentState !== prevState ? 0 : cx - prevX;
+                let dy = currentState !== prevState ? 0 : cy - prevY;
 
-                let dx = cx - prevX;
-                let dy = cy - prevY;
-                if (currentState !== prevState) { dx = 0; dy = 0; }
+                // Handle countdown cancellation if gesture breaks
+                if (currentState !== "RESTART") cancelCountdown();
 
-                if (currentState === "FIST") {
+                if (currentState === "REST") {
                     modeDisplay.innerText = "REST / DO NOTHING";
                     modeDisplay.className = "fist";
-                } else if (currentState === "PINCH") {
-                    modeDisplay.innerText = "FLY / ZOOM (Pinch Up/Down)";
-                    modeDisplay.className = "pinch";
-                    if (Math.abs(dy) > 0.005) {
-                        camera.position.z += dy * Math.max(10, camera.position.z * 0.5); 
-                    }
+                } else if (currentState === "TWO_FINGERS") {
+                    modeDisplay.innerText = "FLY / ZOOM (2 Fingers Up/Down)";
+                    modeDisplay.className = "two-fingers";
+                    if (Math.abs(dy) > 0.005) camera.position.z += dy * Math.max(10, camera.position.z * 0.5); 
                 } else if (currentState === "POINTER") {
                     modeDisplay.innerText = "PAN / STRAFE (1 Finger Up)";
                     modeDisplay.className = "pointer";
                     if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
-                        pivot.position.x -= dx * 100; 
-                        pivot.position.y -= dy * 100;
+                        pivot.position.x -= dx * 100; pivot.position.y -= dy * 100;
                     }
+                } else if (currentState === "RESTART") {
+                    modeDisplay.innerText = "HOLD TO RESTART";
+                    modeDisplay.className = "restart";
+                    startCountdown(); 
                 } else {
                     modeDisplay.innerText = "ORBIT / ROTATE (Open Hand)";
                     modeDisplay.className = "open";
                     if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
-                        pivot.rotation.y += dx * 3;
-                        pivot.rotation.x += dy * 3;
+                        pivot.rotation.y += dx * 3; pivot.rotation.x += dy * 3;
                     }
                 }
 
-                prevX = cx;
-                prevY = cy;
-                prevState = currentState;
-            } else {
-                modeDisplay.innerText = "SEARCHING HAND...";
-                modeDisplay.className = "fist";
+                prevX = cx; prevY = cy; prevState = currentState;
             }
         });
 
         const cameraFeed = new window.Camera(videoElement, {
             onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 640,
-            height: 480
+            width: 640, height: 480
         });
         cameraFeed.start();
 
-        // --------------------------------------------------------
-        // 3. RENDER LOOP
-        // --------------------------------------------------------
+        const bretzelWorldPos = new THREE.Vector3();
+
         function animate() {
             requestAnimationFrame(animate);
+            
+            if (bretzel && !bretzelFound) {
+                
+                bretzel.getWorldPosition(bretzelWorldPos);
+                
+                if (camera.position.distanceTo(bretzelWorldPos) < 35) { 
+                    bretzelFound = true;
+                    document.getElementById('victory-message').style.display = 'block';
+                    
+                    confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 }, zIndex: 9999 });
+                    setTimeout(() => confetti({ particleCount: 100, angle: 60, spread: 55, origin: { x: 0 }, zIndex: 9999 }), 250);
+                    setTimeout(() => confetti({ particleCount: 100, angle: 120, spread: 55, origin: { x: 1 }, zIndex: 9999 }), 400);
+                }
+            }
+
             renderer.render(scene, camera);
         }
         animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
