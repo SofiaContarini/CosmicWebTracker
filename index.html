@@ -199,6 +199,8 @@
 
         let bretzel;
         let bretzelFound = false;
+        let secretBlinkActive = false;
+        let auras = []; 
         const gltfLoader = new GLTFLoader();
         
         let baseScale = 0.11; 
@@ -220,14 +222,33 @@
         const bretzelTex = textureLoader.load('./object/bretzel.jpg');
         bretzelTex.colorSpace = THREE.SRGBColorSpace;
 
+        const auraMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffd700,
+            transparent: true,
+            opacity: 0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.BackSide 
+        });
+
         gltfLoader.load('./object/bretzel.glb', function (gltf) { 
             bretzel = gltf.scene;
             
+            const meshesWithAura = [];
             bretzel.traverse((child) => {
                 if (child.isMesh) {
                     child.material.map = bretzelTex;
                     child.material.needsUpdate = true;
+                    meshesWithAura.push(child);
                 }
+            });
+            
+            meshesWithAura.forEach((child) => {
+                const aura = child.clone();
+                aura.material = auraMaterial;
+                aura.userData.baseScale = child.scale.clone(); // Store the mesh's original scale
+                child.parent.add(aura); 
+                auras.push(aura); // Store to animate scale dynamically
             });
             
             bretzel.position.set(
@@ -244,7 +265,10 @@
         const canvasCtx = canvasElement.getContext('2d');
         
         let prevX = 0, prevY = 0;
-        let prevState = "REST";
+        let activeState = "REST";
+        let lastRawState = "REST";
+        let rawStateTime = performance.now();
+        let movementLockTime = performance.now();
 
         let restartTimer = null;
         let countdownInterval = null;
@@ -336,47 +360,74 @@
                 const isSideways = Math.abs(indexMcp.x - pinkyMcp.x) < 0.08; 
                 const isThumbsUp = indexClosed && middleClosed && ringClosed && pinkyClosed && thumbIsStraightUp && (thumbTip.y < indexMcp.y - 0.05) && isSideways; 
                 const isFist = indexClosed && middleClosed && ringClosed && pinkyClosed && !isThumbsUp; 
+                
+                secretBlinkActive = indexClosed && middleClosed && ringClosed && !pinkyClosed && thumbIsStraightUp;
 
-                let currentState = "REST"; 
-                if (isFist) currentState = "REST"; 
-                else if (isOpen) currentState = "OPEN"; 
-                else if (isTwoFingers) currentState = "TWO_FINGERS"; 
-                else if (isPointer) currentState = "POINTER"; 
-                else if (isThumbsUp) currentState = "RESTART"; 
+                let rawState = "REST"; 
+                if (isFist) rawState = "REST"; 
+                else if (isOpen) rawState = "OPEN"; 
+                else if (isTwoFingers) rawState = "TWO_FINGERS"; 
+                else if (isPointer) rawState = "POINTER"; 
+                else if (isThumbsUp) rawState = "RESTART"; 
 
-                let cx = (currentState === "REST") ? wrist.x : indexTip.x;
-                let cy = (currentState === "REST") ? wrist.y : indexTip.y;
-                let dx = currentState !== prevState ? 0 : cx - prevX;
-                let dy = currentState !== prevState ? 0 : cy - prevY;
+                const now = performance.now();
+                
+                if (rawState !== lastRawState) {
+                    lastRawState = rawState;
+                    rawStateTime = now;
+                }
 
-                if (currentState !== "RESTART") cancelCountdown();
+                if (now - rawStateTime > 100) {
+                    if (activeState !== rawState) {
+                        activeState = rawState;
+                        movementLockTime = now; 
+                        
+                        prevX = wrist.x;
+                        prevY = wrist.y;
+                    }
+                }
 
-                if (currentState === "REST") {
+                let cx = wrist.x;
+                let cy = wrist.y;
+                let dx = cx - prevX;
+                let dy = cy - prevY;
+
+                if (activeState !== "RESTART") cancelCountdown();
+
+                if (activeState === "REST") {
                     modeDisplay.innerText = "REST / DO NOTHING";
                     modeDisplay.className = "fist";
-                } else if (currentState === "TWO_FINGERS") {
+                } else if (activeState === "TWO_FINGERS") {
                     modeDisplay.innerText = "FLY / ZOOM (2 Fingers Up/Down)";
                     modeDisplay.className = "two-fingers";
-                    if (Math.abs(dy) > 0.005) camera.position.z += dy * Math.max(10, camera.position.z * 0.5); 
-                } else if (currentState === "POINTER") {
+                } else if (activeState === "POINTER") {
                     modeDisplay.innerText = "PAN / STRAFE (1 Finger Up)";
                     modeDisplay.className = "pointer";
-                    if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
-                        pivot.position.x -= dx * 100; pivot.position.y -= dy * 100;
-                    }
-                } else if (currentState === "RESTART") {
+                } else if (activeState === "RESTART") {
                     modeDisplay.innerText = "HOLD TO RESTART";
                     modeDisplay.className = "restart";
                     startCountdown(); 
                 } else {
                     modeDisplay.innerText = "ORBIT / ROTATE (Open Hand)";
                     modeDisplay.className = "open";
-                    if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
-                        pivot.rotation.y += dx * 3; pivot.rotation.x += dy * 3;
+                }
+
+                if (now - movementLockTime > 200 && rawState === activeState) {
+                    if (activeState === "TWO_FINGERS") {
+                        if (Math.abs(dy) > 0.005) camera.position.z += dy * Math.max(20, camera.position.z * 1.5); 
+                    } else if (activeState === "POINTER") {
+                        if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
+                            pivot.position.x -= dx * 100; pivot.position.y -= dy * 100;
+                        }
+                    } else if (activeState === "OPEN") {
+                        if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
+                            pivot.rotation.y += dx * 3; pivot.rotation.x += dy * 3;
+                        }
                     }
                 }
 
-                prevX = cx; prevY = cy; prevState = currentState;
+                prevX = cx; 
+                prevY = cy; 
             }
         });
 
@@ -391,31 +442,52 @@
         function animate() {
             requestAnimationFrame(animate);
             
-            if (bretzel && !bretzelFound) {
-                bretzel.getWorldPosition(bretzelWorldPos);
+            if (bretzel) {
+                const t = performance.now();
+                let targetOpacity = 0;
+
+                if (secretBlinkActive) {
+                    targetOpacity = (Math.sin(t * 0.01) + 1) / 2;
+                    // Apply a slightly larger scale multiplier for the secret aura
+                    auras.forEach(a => a.scale.copy(a.userData.baseScale).multiplyScalar(1.15));
+                } else if (bretzelFound) {
+                    // Update cycle to 11000ms: 4 seconds of blinking + 7 seconds of rest
+                    const cycle = t % 11000;
+                    if (cycle < 4000) {
+                        targetOpacity = Math.abs(Math.sin((cycle / 1000) * Math.PI)); 
+                    }
+                    // Apply a tighter, smaller scale multiplier for the victory aura
+                    auras.forEach(a => a.scale.copy(a.userData.baseScale).multiplyScalar(1.05));
+                }
                 
-                if (camera.position.distanceTo(bretzelWorldPos) < 35) { 
-                    bretzelFound = true;
+                auraMaterial.opacity = targetOpacity;
+
+                if (!bretzelFound) {
+                    bretzel.getWorldPosition(bretzelWorldPos);
                     
-                    const victoryMsg = document.getElementById('victory-message');
-                    victoryMsg.style.display = 'block';
-                    
-                    setTimeout(() => {
-                        if (bretzelFound) { 
-                            victoryMsg.classList.add('fade-out');
-                            
-                            setTimeout(() => {
-                                if (bretzelFound) {
-                                    victoryMsg.classList.add('minimized');
-                                    victoryMsg.classList.remove('fade-out');
-                                }
-                            }, 500); 
-                        }
-                    }, 5000);
-                                  
-                    confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 }, zIndex: 9999 });
-                    setTimeout(() => confetti({ particleCount: 100, angle: 60, spread: 55, origin: { x: 0 }, zIndex: 9999 }), 250);
-                    setTimeout(() => confetti({ particleCount: 100, angle: 120, spread: 55, origin: { x: 1 }, zIndex: 9999 }), 400);
+                    if (camera.position.distanceTo(bretzelWorldPos) < 35) { 
+                        bretzelFound = true;
+                        
+                        const victoryMsg = document.getElementById('victory-message');
+                        victoryMsg.style.display = 'block';
+                        
+                        setTimeout(() => {
+                            if (bretzelFound) { 
+                                victoryMsg.classList.add('fade-out');
+                                
+                                setTimeout(() => {
+                                    if (bretzelFound) {
+                                        victoryMsg.classList.add('minimized');
+                                        victoryMsg.classList.remove('fade-out');
+                                    }
+                                }, 500); 
+                            }
+                        }, 5000);
+                                      
+                        confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 }, zIndex: 9999 });
+                        setTimeout(() => confetti({ particleCount: 100, angle: 60, spread: 55, origin: { x: 0 }, zIndex: 9999 }), 250);
+                        setTimeout(() => confetti({ particleCount: 100, angle: 120, spread: 55, origin: { x: 1 }, zIndex: 9999 }), 400);
+                    }
                 }
             }
 
