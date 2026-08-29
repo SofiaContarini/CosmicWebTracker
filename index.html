@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cosmic Web | Hand Tracked Pretzel Hunt</title>
+    <title id="page-title">Cosmic Web | Hand Tracked Pretzel Hunt</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #010103; 
@@ -29,14 +29,18 @@
             border-radius: 8px; font-size: 20px; font-weight: bold; border: 2px solid #555; 
         }
         
-        #difficulty-ui {
+        #settings-ui {
             position: absolute; top: 20px; right: 20px; z-index: 10;
-            background: rgba(20, 20, 20, 0.8); padding: 10px; border-radius: 8px;
-            border: 2px solid #555; display: flex; gap: 10px; align-items: center;
+            background: rgba(20, 20, 20, 0.8); padding: 15px; border-radius: 8px;
+            border: 2px solid #555; display: flex; flex-direction: column; gap: 12px;
         }
-        #difficulty-ui select {
+        .setting-row {
+            display: flex; justify-content: space-between; align-items: center; gap: 15px;
+        }
+        #settings-ui select {
             background: #222; color: white; border: 1px solid #777; 
             padding: 5px; border-radius: 4px; font-size: 16px; outline: none; cursor: pointer;
+            width: 100px;
         }
         
         #gesture-legend {
@@ -114,25 +118,37 @@
         <div id="mode-display" class="fist">INITIALIZING...</div>
     </div>
     
-    <div id="difficulty-ui">
-        <label for="mode-select">Difficulty:</label>
-        <select id="mode-select">
-            <option value="easy">Easy</option>
-            <option value="medium" selected>Medium</option>
-            <option value="hard">Hard</option>
-        </select>
+    <div id="settings-ui">
+        <div class="setting-row">
+            <label id="label-lang" for="lang-select">Language:</label>
+            <select id="lang-select">
+                <option value="en" selected>English</option>
+                <option value="de">Deutsch</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <label id="label-diff" for="mode-select">Difficulty:</label>
+            <select id="mode-select">
+                <option id="opt-easy" value="easy">Easy</option>
+                <option id="opt-med" value="medium" selected>Medium</option>
+                <option id="opt-hard" value="hard">Hard</option>
+            </select>
+        </div>
     </div>
 
     <div id="gesture-legend">
-        <div class="gesture-item"><img src="icons/fist.png" alt="Rest"> <span><b>FIST:</b> Rest / Default</span></div>
-        <div class="gesture-item"><img src="icons/open.png" alt="Orbit"> <span><b>OPEN:</b> Orbit Web</span></div>
-        <div class="gesture-item"><img src="icons/pointer.png" alt="Pan"> <span><b>1 FINGER:</b> Pan / Strafe</span></div>
-        <div class="gesture-item"><img src="icons/two_fingers.png" alt="Fly"> <span><b>2 FINGERS:</b> Fly Forward/Back</span></div>
-        <div class="gesture-item"><img src="icons/thumb_up.png" alt="Restart"> <span><b>THUMB UP:</b> Restart Game</span></div>
+        <div class="gesture-item"><img src="icons/fist.png" alt="Rest"> <span id="leg-fist"><b>FIST:</b> Rest / Default</span></div>
+        <div class="gesture-item"><img src="icons/open.png" alt="Orbit"> <span id="leg-open"><b>OPEN:</b> Orbit Web</span></div>
+        <div class="gesture-item"><img src="icons/pointer.png" alt="Pan"> <span id="leg-pan"><b>1 FINGER:</b> Pan / Strafe</span></div>
+        <div class="gesture-item"><img src="icons/two_fingers.png" alt="Fly"> <span id="leg-fly"><b>2 FINGERS:</b> Fly Forward/Back</span></div>
+        <div class="gesture-item"><img src="icons/thumb_up.png" alt="Restart"> <span id="leg-thumb"><b>THUMB UP:</b> Restart Game</span></div>
     </div>
     
     <div id="countdown-overlay">3</div>
-    <div id="victory-message">🥨 PRETZEL FOUND! 🥨<br><span style="font-size:20px; color:#fff;">You explored the cosmic web!</span></div>
+    <div id="victory-message">
+        <span id="vic-title">🥨 PRETZEL FOUND! 🥨</span><br>
+        <span id="vic-sub" style="font-size:20px; color:#fff;">You explored the cosmic web!</span>
+    </div>
     <div id="canvas-container"></div>
     
     <div id="video-container">
@@ -145,6 +161,85 @@
         import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+        // --- Localization System ---
+        const i18n = {
+            en: {
+                pageTitle: "Cosmic Web | Hand Tracked Pretzel Hunt",
+                init: "INITIALIZING...",
+                labelLang: "Language:",
+                labelDiff: "Difficulty:",
+                optEasy: "Easy",
+                optMed: "Medium",
+                optHard: "Hard",
+                legFist: "<b>FIST:</b> Rest / Default",
+                legOpen: "<b>OPEN:</b> Orbit Web",
+                legPan: "<b>1 FINGER:</b> Pan / Strafe",
+                legFly: "<b>2 FINGERS:</b> Fly Forward/Back",
+                legThumb: "<b>THUMB UP:</b> Restart Game",
+                startMsg: "START!",
+                vicTitle: "🥨 PRETZEL FOUND! 🥨",
+                vicSub: "You explored the cosmic web!",
+                modRest: "REST / DO NOTHING",
+                modFly: "FLY / ZOOM (2 Fingers Up/Down)",
+                modPan: "PAN / STRAFE (1 Finger Up)",
+                modRestart: "HOLD TO RESTART",
+                modOrbit: "ORBIT / ROTATE (Open Hand)"
+            },
+            de: {
+                pageTitle: "Kosmisches Netz | Handverfolgte Brezensuche",
+                init: "INITIALISIERT...",
+                labelLang: "Sprache:",
+                labelDiff: "Schwierigkeit:",
+                optEasy: "Einfach",
+                optMed: "Mittel",
+                optHard: "Schwer",
+                legFist: "<b>FAUST:</b> Ruhe / Standard",
+                legOpen: "<b>OFFEN:</b> Netz Umkreisen",
+                legPan: "<b>1 FINGER:</b> Schwenken / Bewegen",
+                legFly: "<b>2 FINGER:</b> Vor/Zurück fliegen",
+                legThumb: "<b>DAUMEN HOCH:</b> Spiel Neustart",
+                startMsg: "LOS!",
+                vicTitle: "🥨 BREZE GEFUNDEN! 🥨",
+                vicSub: "Du hast das kosmische Netz erkundet!",
+                modRest: "RUHE / NICHTS TUN",
+                modFly: "FLIEGEN / ZOOMEN (2 Finger Hoch/Runter)",
+                modPan: "SCHWENKEN / BEWEGEN (1 Finger Hoch)",
+                modRestart: "HALTEN FÜR NEUSTART",
+                modOrbit: "UMKREISEN / DREHEN (Offene Hand)"
+            }
+        };
+
+        let currentLang = 'en';
+        const langSelect = document.getElementById('lang-select');
+        const modeDisplay = document.getElementById('mode-display');
+
+        function updateLanguage() {
+            currentLang = langSelect.value;
+            const t = i18n[currentLang];
+            
+            document.getElementById('page-title').innerText = t.pageTitle;
+            if (modeDisplay.innerText === i18n['en'].init || modeDisplay.innerText === i18n['de'].init) {
+                modeDisplay.innerText = t.init;
+            }
+            document.getElementById('label-lang').innerText = t.labelLang;
+            document.getElementById('label-diff').innerText = t.labelDiff;
+            document.getElementById('opt-easy').innerText = t.optEasy;
+            document.getElementById('opt-med').innerText = t.optMed;
+            document.getElementById('opt-hard').innerText = t.optHard;
+            
+            document.getElementById('leg-fist').innerHTML = t.legFist;
+            document.getElementById('leg-open').innerHTML = t.legOpen;
+            document.getElementById('leg-pan').innerHTML = t.legPan;
+            document.getElementById('leg-fly').innerHTML = t.legFly;
+            document.getElementById('leg-thumb').innerHTML = t.legThumb;
+            
+            document.getElementById('vic-title').innerText = t.vicTitle;
+            document.getElementById('vic-sub').innerText = t.vicSub;
+        }
+
+        langSelect.addEventListener('change', updateLanguage);
+
+        // --- Three.js Setup ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
@@ -163,7 +258,6 @@
         dirLight.position.set(100, 200, 300);
         scene.add(dirLight);
 
-        const modeDisplay = document.getElementById('mode-display');
         const countdownOverlay = document.getElementById('countdown-overlay');
 
         const loader = new PLYLoader();
@@ -246,9 +340,9 @@
             meshesWithAura.forEach((child) => {
                 const aura = child.clone();
                 aura.material = auraMaterial;
-                aura.userData.baseScale = child.scale.clone(); // Store the mesh's original scale
+                aura.userData.baseScale = child.scale.clone(); 
                 child.parent.add(aura); 
-                auras.push(aura); // Store to animate scale dynamically
+                auras.push(aura); 
             });
             
             bretzel.position.set(
@@ -286,7 +380,7 @@
                 if (countdownValue > 0) {
                     countdownOverlay.innerText = countdownValue;
                 } else {
-                    countdownOverlay.innerText = "START!";
+                    countdownOverlay.innerText = i18n[currentLang].startMsg;
                 }
             }, 1000);
 
@@ -394,21 +488,22 @@
 
                 if (activeState !== "RESTART") cancelCountdown();
 
+                const t = i18n[currentLang];
                 if (activeState === "REST") {
-                    modeDisplay.innerText = "REST / DO NOTHING";
+                    modeDisplay.innerText = t.modRest;
                     modeDisplay.className = "fist";
                 } else if (activeState === "TWO_FINGERS") {
-                    modeDisplay.innerText = "FLY / ZOOM (2 Fingers Up/Down)";
+                    modeDisplay.innerText = t.modFly;
                     modeDisplay.className = "two-fingers";
                 } else if (activeState === "POINTER") {
-                    modeDisplay.innerText = "PAN / STRAFE (1 Finger Up)";
+                    modeDisplay.innerText = t.modPan;
                     modeDisplay.className = "pointer";
                 } else if (activeState === "RESTART") {
-                    modeDisplay.innerText = "HOLD TO RESTART";
+                    modeDisplay.innerText = t.modRestart;
                     modeDisplay.className = "restart";
                     startCountdown(); 
                 } else {
-                    modeDisplay.innerText = "ORBIT / ROTATE (Open Hand)";
+                    modeDisplay.innerText = t.modOrbit;
                     modeDisplay.className = "open";
                 }
 
@@ -448,15 +543,12 @@
 
                 if (secretBlinkActive) {
                     targetOpacity = (Math.sin(t * 0.01) + 1) / 2;
-                    // Apply a slightly larger scale multiplier for the secret aura
                     auras.forEach(a => a.scale.copy(a.userData.baseScale).multiplyScalar(1.15));
                 } else if (bretzelFound) {
-                    // Update cycle to 11000ms: 4 seconds of blinking + 7 seconds of rest
                     const cycle = t % 11000;
                     if (cycle < 4000) {
                         targetOpacity = Math.abs(Math.sin((cycle / 1000) * Math.PI)); 
                     }
-                    // Apply a tighter, smaller scale multiplier for the victory aura
                     auras.forEach(a => a.scale.copy(a.userData.baseScale).multiplyScalar(1.05));
                 }
                 
