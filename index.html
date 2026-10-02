@@ -16,7 +16,7 @@
             position: absolute; top: 20px; left: 20px; z-index: 10; pointer-events: none; 
         }
         #video-container { 
-            position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px;
+            position: absolute; bottom: 20px; right: 20px; width: 300px; height: 225px; /* Increased by 25% */
             z-index: 10; border-radius: 12px; border: 2px solid #555; 
             overflow: hidden; background-color: #000;
         }
@@ -516,7 +516,8 @@
                         }
                     } else if (activeState === "OPEN") {
                         if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
-                            pivot.rotation.y += dx * 3; pivot.rotation.x += dy * 3;
+                            pivot.rotation.y -= dx * 3; // Inverted left/right rotation
+                            pivot.rotation.x += dy * 3;
                         }
                     }
                 }
